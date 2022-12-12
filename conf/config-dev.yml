@@ -1,0 +1,54 @@
+profile: dev
+application:
+  name: Tausi API
+  jwtsecret: venkatraman@phiaura.in|3edge.in
+
+http:
+  portnumber: 8080
+  readtimeout: 50
+  writetimeout: 50
+  maxheaderbytes: 4096
+
+# amazonses:
+#   passwordreseturl: https://tausi-score.co.tz/resetpassword
+#   sender: Support <muralikrishnan.s@3edge.in>
+#   accesskeyid: AKIAUCYFGVF5GONOEC5I
+#   secretaccesskey: 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
+  # passwordreseturl: https://tausi.avconference.in/resetpassword  
+  # sender: Support <support@3edge.in>
+  # accesskeyid: AKIASBONSRBVVFDRMQC7
+  # secretaccesskey: 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
+
+logging:
+  logfile:
+    access:
+      loglevel: DEBUG
+      ## If Path is empty the output becomes stdout
+      #path: /var/log/app
+      name: access.log
+    service:
+      loglevel: DEBUG
+      #path: /var/log/app
+      name: service.log
+    bootstrap:
+      loglevel: DEBUG
+      #path: /var/log/app
+      name: bootstrap.log
+  
+# database:
+#   tausi:
+#     driver: mysql
+#     hostname: tausi-mysql
+#     portnumber: 3306
+#     databasename: tausi_ut
+#     username: tausi_app
+#     password: tausi
+    
+database:
+  tausi:
+    driver: mysql
+    hostname: localhost
+    portnumber: 3306
+    databasename: tausi_ut
+    username: root
+    password: root
