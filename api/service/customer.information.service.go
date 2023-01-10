@@ -3,25 +3,56 @@ package service
 import (
 	"errors"
 	"math"
-
-	// "strconv"
+	"strconv"
 	"time"
 
+	"github.com/xuri/excelize/v2"
+
+	// "github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/NEHA20-1992/tausi_code/api/auth"
 	"github.com/NEHA20-1992/tausi_code/api/model"
 
-	// "github.com/gofiber/fiber/v2"
-	// "github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
 var ErrAllModelVariableRequired = errors.New("value for all model variable required")
 var ErrModelVariableNotFound = errors.New("model variable not found")
 var ErrInvalidCustomerIDProofType = errors.New("invalid customer id proof type")
+var ErrEmpty = errors.New("data can't be empty")
 
 const (
-	SqlSearch                         string = `Select from customer_information where customer_information_id=?`
-	SqlPagination                     string = ` LIMIT %d OFFSET %d ",  perPage, (page-1)*perPage`
+	SqlBulkComputeCustomerInformationItem string = `UPDATE customer_information_item cii
+	INNER JOIN
+model_variable mv ON mv.model_variable_id = cii.model_variable_id 
+SET 
+cii.preprocessed_value = IF(mv.standard_deviation_value = 0,
+	ROUND(cii.value, 9),
+	ROUND((cii.value - mv.mean_value) / mv.standard_deviation_value,
+			9))
+WHERE
+cii.customer_information_id !=0;
+`
+	SqlBulkComputeCustomerInformation string = `UPDATE customer_information ci
+	INNER JOIN
+(SELECT 
+	customer_information_id,
+		ROUND(EXP(ppv) / (1 + EXP(ppv)), 2) probability_of_default_percentage,
+		100 - ((ROUND(EXP(ppv) / (1 + EXP(ppv)), 4)) * 100) group_score
+FROM
+	(SELECT 
+	cii.customer_information_id,
+		ROUND(SUM(cii.preprocessed_value * mv.coefficient_value) + m.intercept_value, 9) ppv
+FROM
+	customer_information_item cii
+INNER JOIN model_variable mv ON mv.model_variable_id = cii.model_variable_id
+INNER JOIN model m ON m.model_id = mv.model_id
+WHERE
+	cii.customer_information_id !=0
+GROUP BY cii.customer_information_id, m.intercept_value) b) a ON a.customer_information_id = ci.customer_information_id 
+SET 
+ci.probability_of_default_percentage =(a.probability_of_default_percentage*100),
+ci.group_score = TRUNCATE(a.group_score, 2)`
+
 	SqlComputeCustomerInformationItem string = `UPDATE customer_information_item cii
 	INNER JOIN
 model_variable mv ON mv.model_variable_id = cii.model_variable_id 
@@ -38,7 +69,7 @@ cii.customer_information_id = ?;
 (SELECT 
 	customer_information_id,
 		ROUND(EXP(ppv) / (1 + EXP(ppv)), 2) probability_of_default_percentage,
-		100 - (ROUND(EXP(ppv) / (1 + EXP(ppv)), 4) * 100) group_score
+		100 - ((ROUND(EXP(ppv) / (1 + EXP(ppv)), 4)) * 100) group_score
 FROM
 	(SELECT 
 	cii.customer_information_id,
@@ -51,17 +82,20 @@ WHERE
 	cii.customer_information_id = ?
 GROUP BY cii.customer_information_id, m.intercept_value) b) a ON a.customer_information_id = ci.customer_information_id 
 SET 
-ci.probability_of_default_percentage = a.probability_of_default_percentage,
+ci.probability_of_default_percentage =(a.probability_of_default_percentage*100),
 ci.group_score = TRUNCATE(a.group_score, 2)`
 )
 
 type CustomerInformationService interface {
 	Create(claim *auth.AuthenticatedClaim, companyName string, modelName string, CustomerInformation *model.CustomerInformation) (*model.CustomerInformation, error)
+	CreateInBulk(claim *auth.AuthenticatedClaim, companyName string, modelName string, CustomerInformation []*model.CustomerInformation) ([]*model.CustomerInformation, error)
+
 	Get(claim *auth.AuthenticatedClaim, companyName string, modelName string, ID uint32) (*model.CustomerInformation, error)
 	GetAllCompayCustomer(claim *auth.AuthenticatedClaim, companyName string, modelName string) ([]model.CustomerInformation, error)
 	// GetAll(claim *auth.AuthenticatedClaim, companyName string) ([]model.CustomerInformation, error)
-	GetAll(claim *auth.AuthenticatedClaim, companyName string, modelName string, pageNumber uint32, size uint32, cid uint32, search string, CreditScore float32) ([]model.CustomerInformation, error)
-	// pagination([]model.CustomerInformation)([]model.CustomerInformation,error)
+	GetAllExcel(claim *auth.AuthenticatedClaim, info *model.CustomerFilterRequest) (*excelize.File, error)
+	GetAll(claim *auth.AuthenticatedClaim, info *model.CustomerFilterRequest) ([]model.CustomerInformation, error)
+
 	GetCreditScore(claim *auth.AuthenticatedClaim, companyName string, modelName string, ID uint32) (*model.CustomerCreditScore, error)
 }
 
@@ -81,18 +115,41 @@ func GetCustomerInformationService(db *gorm.DB) CustomerInformationService {
 		modelVariableService: GetModelVariableService(db)}
 }
 
-// func (c *fiber.Ctx)pagination(custInfo []model.CustomerInformation)(result []model.CustomerInformation,err error){
-// sql := "Select * from custinfo"
-// page := strconv.Atoi(m.Query("page","1"))
-// m.db.Raw(sql).Scan(&custInfo)
-// return
-// }
+func (m *CustomerInformationServiceImpl) CreateInBulk(claim *auth.AuthenticatedClaim, companyName string, modelName string, customerInformation []*model.CustomerInformation) (result []*model.CustomerInformation, err error) {
+	if len(customerInformation) == 0 {
+		err = ErrEmpty
+		return
+	}
+	tx := m.db.Begin()
+	err = tx.
+		Model(&customerInformation).
+		CreateInBatches(&customerInformation, len(customerInformation)).
+		Error
+	if err != nil {
+		return
+	}
+	var createdRecord []*model.CustomerInformation
+	err = tx.Model(&model.CustomerInformation{}).
+		FindInBatches(&createdRecord, len(customerInformation), func(tx *gorm.DB, batch int) error {
+
+			return nil
+		}).
+		Error
+
+	tx.Exec(SqlBulkComputeCustomerInformationItem)
+	tx.Exec(SqlBulkComputeCustomerInformation)
+	tx.Commit()
+	result = createdRecord
+	return
+}
+
 func (m *CustomerInformationServiceImpl) Create(claim *auth.AuthenticatedClaim, companyName string, modelName string, customerInformation *model.CustomerInformation) (result *model.CustomerInformation, err error) {
 	var modelValue *model.Model
 	modelValue, err = m.modelService.GetDetails(claim, companyName, modelName)
 	if err != nil {
 		return
 	}
+
 	customerInformation.CompanyID = modelValue.CompanyID
 	customerInformation.ModelID = modelValue.ID
 	customerInformation.CreatedById = claim.UserId
@@ -107,6 +164,7 @@ func (m *CustomerInformationServiceImpl) Create(claim *auth.AuthenticatedClaim, 
 
 	customerInformation.CustomerIDProofTypeID = cIdProofType.ID
 	if len(modelValue.Variables) != len(customerInformation.Items) {
+
 		err = ErrAllModelVariableRequired
 		return
 	}
@@ -289,7 +347,7 @@ func (m *CustomerInformationServiceImpl) GetAllCompayCustomer(claim *auth.Authen
 
 	list := []model.CustomerInformation{}
 	err = m.db.Model(&model.CustomerInformation{}).
-		Select("customer_information_id").
+		Select("*").
 		Where("model_id = ?", modelValue.ID).
 		Find(&list).
 		Error
@@ -317,180 +375,122 @@ func (m *CustomerInformationServiceImpl) GetAllCompayCustomer(claim *auth.Authen
 
 	return
 }
+func (m *CustomerInformationServiceImpl) GetAll(claim *auth.AuthenticatedClaim, info *model.CustomerFilterRequest) (result []model.CustomerInformation, err error) {
 
-func (m *CustomerInformationServiceImpl) GetAll(claim *auth.AuthenticatedClaim, companyName string, modelName string, pageNumber uint32, size uint32, cid uint32, search string, CreditScore float32) (result []model.CustomerInformation, err error) {
-	var result1 []model.CustomerInformation
-	if companyName == "" {
-		list := []model.CustomerInformation{}
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").Limit(int(size)).Offset(int((size) * (pageNumber - 1))).
-			Find(&list).
-			Error
-		if err != nil {
-			return
-		}
-		var resultList []model.CustomerInformation = make([]model.CustomerInformation, len(list))
-		for ciIndx, ci := range list {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
+	list := []model.CustomerInformation{}
 
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList[ciIndx] = *updatedRecord
-
-		}
-		result1 = resultList
-
-	} else if modelName == "" {
-		modelValue, _ := m.companyService.Get(claim, companyName)
-
-		list := []model.CustomerInformation{}
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").
-			Where("company_id = ? and customer_information_id <= ? and customer_information_id >?", modelValue.ID, size*(pageNumber), size*(pageNumber-1)).
-			Find(&list).
-			Error
-		if err != nil {
-			return
-		}
-
-		var resultList []model.CustomerInformation = make([]model.CustomerInformation, len(list))
-		for ciIndx, ci := range list {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
-
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList[ciIndx] = *updatedRecord
-		}
-		result1 = resultList
-	} else {
-		modelValue, _ := m.modelService.Get(claim, companyName, modelName)
-
-		list := []model.CustomerInformation{}
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").
-			Where("model_id = ? and company_id =? and customer_information_id <= ? and customer_information_id >?", modelValue.ID, modelValue.CompanyID, size*pageNumber, size*(pageNumber-1)).
-			Find(&list).
-			Error
-		if err != nil {
-			return
-		}
-
-		var resultList []model.CustomerInformation = make([]model.CustomerInformation, len(list))
-		for ciIndx, ci := range list {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
-
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList[ciIndx] = *updatedRecord
-		}
-		result1 = resultList
-	}
-	if cid > 0 {
-
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").
-			Where(" customer_information_id =? and customer_information_id <= ? and customer_information_id >?", cid, size*pageNumber, size*(pageNumber-1)).
-			Find(&result1).
-			Error
-		if err != nil {
-			return
-		}
-		var resultList1 []model.CustomerInformation = make([]model.CustomerInformation, len(result1))
-		for ciIndx, ci := range result1 {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
-
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList1[ciIndx] = *updatedRecord
-		}
-		result1 = resultList1
-	}
-	if search != "" {
-
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").
-			Where(" first_name =? and customer_information_id <= ? and customer_information_id >?", search, size*pageNumber, size*(pageNumber-1)).
-			Find(&result1).
-			Error
-		if err != nil {
-			return
-		}
-		var resultList1 []model.CustomerInformation = make([]model.CustomerInformation, len(result1))
-		for ciIndx, ci := range result1 {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
-
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList1[ciIndx] = *updatedRecord
-		}
-		result1 = resultList1
-	}
-	if CreditScore > 0 {
-
-		err = m.db.Model(&model.CustomerInformation{}).
-			Select("customer_information_id").
-			Where(" group_score =>? and customer_information_id <= ? and customer_information_id >?", CreditScore, size*pageNumber, size*(pageNumber-1)).
-			Find(&result1).
-			Error
-		if err != nil {
-			return
-		}
-		var resultList1 []model.CustomerInformation = make([]model.CustomerInformation, len(result1))
-		for ciIndx, ci := range result1 {
-			var ciValue, updatedRecord *model.CustomerInformation
-			ciValue, err = m.getx(claim, ci.ID)
-			if err != nil {
-				return
-			}
-
-			updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
-			if err != nil {
-				return
-			}
-
-			resultList1[ciIndx] = *updatedRecord
-		}
-		result1 = resultList1
+	var query string
+	m.db.Raw("CALL  fetch_data_from_customer_information(?,?,?,?,?,?,?)", info.CID, info.MID, info.City, info.MinGroupScore, info.MaxGroupScore, info.MinPercentage, info.MaxPercentage).Scan(&query)
+	err = m.db.Model(&model.CustomerInformation{}).
+		Select("customer_information_id").Where(query).Order(info.Sort).Limit(int(info.Size)).Offset(int((info.Size) * (info.PageNumber - 1))).
+		Find(&list).
+		Error
+	if err != nil {
+		return
 	}
 
-	result = result1
+	var resultList []model.CustomerInformation = make([]model.CustomerInformation, len(list))
+	for ciIndx, ci := range list {
+		var ciValue, updatedRecord *model.CustomerInformation
+		ciValue, err = m.getx(claim, ci.ID)
+		if err != nil {
+			return
+		}
+
+		updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
+		if err != nil {
+			return
+		}
+
+		resultList[ciIndx] = *updatedRecord
+	}
+
+	result = resultList
+
 	return
 }
+
+func (m *CustomerInformationServiceImpl) GetAllExcel(claim *auth.AuthenticatedClaim, info *model.CustomerFilterRequest) (result *excelize.File, err error) {
+	var result1 []model.CustomerInformation
+	list := []model.CustomerInformation{}
+	var query string
+	m.db.Raw("CALL  fetch_data_from_customer_information(?,?,?,?,?,?,?)", info.CID, info.MID, info.City, info.MinGroupScore, info.MaxGroupScore, info.MinPercentage, info.MaxPercentage).Scan(&query)
+	err = m.db.Model(&model.CustomerInformation{}).
+		Select("customer_information_id").Where(query).Order(info.Sort).Limit(int(info.Size)).Offset(int((info.Size) * (info.PageNumber - 1))).
+		Find(&list).
+		Error
+	if err != nil {
+		return
+	}
+
+	var resultList []model.CustomerInformation = make([]model.CustomerInformation, len(list))
+	for ciIndx, ci := range list {
+		var ciValue, updatedRecord *model.CustomerInformation
+		ciValue, err = m.getx(claim, ci.ID)
+		if err != nil {
+			return
+		}
+
+		updatedRecord, err = m.updatedRecord(m.db, claim, ciValue)
+		if err != nil {
+			return
+		}
+
+		resultList[ciIndx] = *updatedRecord
+	}
+
+	result1 = resultList
+	if len(result1) == 0 {
+		result = nil
+		return
+	} else {
+		f := excelize.NewFile()
+
+		f.SetCellValue("Sheet1", "A1", "ID")
+		f.SetCellValue("Sheet1", "B1", "FIRST NAME")
+		f.SetCellValue("Sheet1", "C1", "LAST NAME")
+		f.SetCellValue("Sheet1", "D1", "Customer Id Proof Number")
+		f.SetCellValue("Sheet1", "E1", "Contact Number")
+		f.SetCellValue("Sheet1", "F1", "City")
+		f.SetCellValue("Sheet1", "G1", "Account ID")
+		f.SetCellValue("Sheet1", "H1", "Probability Of Default Percentage")
+		f.SetCellValue("Sheet1", "I1", "Group Score")
+		// for i, _ := range result1[0].Items {
+
+		// 	f.SetCellValue("Sheet1", string('J'+i)+strconv.Itoa(1), result1[0].Items[i].Name)
+
+		// }
+		for X, _ := range result1 {
+			f.SetCellValue("Sheet1", "A"+strconv.Itoa(X+2), result1[X].ID)
+			f.SetCellValue("Sheet1", "B"+strconv.Itoa(X+2), result1[X].FirstName)
+			f.SetCellValue("Sheet1", "C"+strconv.Itoa(X+2), result1[X].LastName)
+			f.SetCellValue("Sheet1", "D"+strconv.Itoa(X+2), result1[X].CustomerIdProofNumber)
+			f.SetCellValue("Sheet1", "E"+strconv.Itoa(X+2), result1[X].ContactNumber)
+			f.SetCellValue("Sheet1", "F"+strconv.Itoa(X+2), result1[X].City)
+			f.SetCellValue("Sheet1", "G"+strconv.Itoa(X+2), result1[X].AccountID)
+			f.SetCellValue("Sheet1", "H"+strconv.Itoa(X+2), result1[X].ProbabilityOfDefaultPercentage)
+			f.SetCellValue("Sheet1", "I"+strconv.Itoa(X+2), result1[X].GroupScore)
+
+			for i, _ := range result1[X].Items {
+				name, _ := f.GetCellValue("Sheet1", string('J'+i)+strconv.Itoa(1))
+				if name == result1[X].Items[i].Name || name == "" {
+					f.SetCellValue("Sheet1", string('J'+i)+strconv.Itoa(1), result1[X].Items[i].Name)
+					f.SetCellValue("Sheet1", string('J'+i)+strconv.Itoa(X+2), result1[X].Items[i].Value)
+				} else {
+					f.SetCellValue("Sheet1", string('J'+i+1)+strconv.Itoa(1), result1[X].Items[i].Name)
+					f.SetCellValue("Sheet1", string('J'+i+1)+strconv.Itoa(X+2), result1[X].Items[i].Value)
+
+				}
+
+			}
+
+		}
+		result = f
+	}
+
+	return
+}
+
 func (m CustomerInformationServiceImpl) updatedRecord(tx *gorm.DB, claim *auth.AuthenticatedClaim, createdRecord *model.CustomerInformation) (result *model.CustomerInformation, err error) {
 	createdRecord.CreatedBy, err = getUserName(m.db, claim, nil, createdRecord.CreatedById)
 	if err != nil {

@@ -18,7 +18,7 @@ func SendEmailService(recipient, subject, htmlBodyContent string) (err error) {
 
 	// Replace sender@example.com with your "From" address.
 	// This address must be verified with Amazon SES.
-	//Sender := "Support <support@3edge.in>"
+	// Sender := "Support <support@3edge.in>"
 
 	// Replace recipient@example.com with a "To" address. If your account
 	// is still in the sandbox, this address must be verified.
@@ -162,6 +162,21 @@ func SendEmailServiceSmtp(recipient string, name string, subject string, htmlBod
 	// 	fmt.Println(err)
 	// 	return
 	// }
+	return
+}
+
+func SendEmailServiceSmtp1(recipient string, name string, subject string, htmlBodyContent string, result *model.User, templateName int) (err error) {
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", "nehamaltiyadav@gmail.com")
+	m.SetHeader("To", recipient)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", htmlBodyContent)
+
+	d := gomail.NewDialer("smtp.gmail.com", 465, "nehamaltiyadav@gmail.com", "ooazlkgohytqqjlg")
+	if err := d.DialAndSend(m); err != nil {
+		panic(err)
+	}
 	return
 }
 

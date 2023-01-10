@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-
 	"net/http"
 	"strconv"
 
@@ -18,12 +17,15 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrCompanyMismatch = errors.New("Enter valid company,company name not found")
-var ErrEnterValidCompany = errors.New("company name can't be empty")
+var ErrNoData = errors.New("no data found")
+var ErrCompanyNotFound = errors.New("enter valid company")
+var ErrModelNotFound = errors.New("enter valid model name")
+var ErrCompanyMismatch = errors.New("company mismatch")
 
 type CustomerInformationHandler interface {
 	Create(w http.ResponseWriter, req *http.Request)
 	GetAllCompayCustomer(w http.ResponseWriter, req *http.Request)
+	GetAllCustomerExcel(w http.ResponseWriter, req *http.Request)
 	GetAllCustomer(w http.ResponseWriter, req *http.Request)
 	// GetAllCustomerx(w http.ResponseWriter, req *http.Request)
 
@@ -72,11 +74,11 @@ func (h CustomerInformationHandlerImpl) Create(w http.ResponseWriter, req *http.
 
 	aCompany, err := h.companyService.Get(claim, companyName)
 	if err != nil {
-		response.ERROR(w, http.StatusBadRequest, ErrCompanyMismatch)
+		response.ERROR(w, http.StatusBadRequest, err)
 		return
 	}
 	if aCompany.ID != claim.CompanyId {
-		response.ERROR(w, http.StatusBadRequest, ErrCompanyMismatch)
+		response.ERROR(w, http.StatusBadRequest, err)
 	}
 
 	result, err := h.service.Create(claim, companyName, modelName, &request)
@@ -88,6 +90,82 @@ func (h CustomerInformationHandlerImpl) Create(w http.ResponseWriter, req *http.
 	response.JSON(w, http.StatusOK, result)
 }
 
+func (h CustomerInformationHandlerImpl) GetAllCustomerExcel(w http.ResponseWriter, req *http.Request) {
+	claim, err := auth.ValidateToken(req)
+	if err != nil {
+		response.ERROR(w, http.StatusUnauthorized, err)
+		return
+	}
+	// if claim.CompanyId != 1 {
+	// 	response.ERROR(w, http.StatusUnauthorized, err)
+	// 	return
+	// }
+
+	var request = model.CustomerFilterRequest{}
+	// queryData := req.FormValue("query")
+	// // if aCompanyData == "" {
+	// // 	response.ERROR(w, http.StatusBadRequest, err)
+	// // 	return
+	// // }
+	// queryData, err = url.PathUnescape(queryData)
+	// if err != nil {
+	// 	response.ERROR(w, http.StatusBadRequest, err)
+	// 	return
+	// }
+
+	// var DataBytes []byte = []byte(queryData)
+	// err = json.Unmarshal(DataBytes, &request)
+	// if err != nil {
+	// 	response.ERROR(w, http.StatusBadRequest, err)
+	// 	return
+	// }
+
+	// request.Query = req.FormValue("Query")
+	request.CompanyName = req.FormValue("CompanyName")
+	request.ModelName = req.FormValue("ModelName")
+	request.City = req.FormValue("City")
+	MinGroupScore := req.FormValue("MinGroupScore")
+	request.MinGroupScore, err = strconv.ParseFloat(MinGroupScore, 64)
+	MaxGroupScore := req.FormValue("MaxGroupScore")
+	request.MaxGroupScore, err = strconv.ParseFloat(MaxGroupScore, 64)
+	MinPercentage := req.FormValue("MinPercentage")
+	request.MinPercentage, err = strconv.ParseFloat(MinPercentage, 64)
+	MaxPercentage := req.FormValue("MaxPercentage")
+	request.MaxPercentage, err = strconv.ParseFloat(MaxPercentage, 64)
+	request.Sort = req.FormValue("Sort")
+	PageNumber, err := strconv.ParseUint(req.FormValue("PageNumber"), 10, 64)
+	request.PageNumber = uint32(PageNumber)
+	Size, err := strconv.ParseUint(req.FormValue("Size"), 10, 64)
+	request.Size = uint32(Size)
+	if request.CompanyName != "" {
+		c, err := h.companyService.Get(claim, request.CompanyName)
+		if err != nil {
+			response.ERROR(w, http.StatusBadRequest, ErrCompanyNotFound)
+			return
+		}
+		request.CID = c.ID
+	}
+	if request.ModelName != "" {
+		m, err := h.modelService.Get(claim, request.CompanyName, request.ModelName)
+		if err != nil {
+			response.ERROR(w, http.StatusBadRequest, ErrModelNotFound)
+			return
+		}
+		request.MID = m.ID
+	}
+	result, err := h.service.GetAllExcel(claim, &request)
+	if err != nil {
+		response.ERROR(w, http.StatusInternalServerError, err)
+		return
+	}
+	if result == nil {
+		response.ERROR(w, http.StatusOK, ErrNoData)
+
+	} else {
+		response.JSONDOWNLOAD(w, http.StatusOK, result)
+	}
+}
+
 func (h CustomerInformationHandlerImpl) GetAllCustomer(w http.ResponseWriter, req *http.Request) {
 	claim, err := auth.ValidateToken(req)
 	if err != nil {
@@ -96,12 +174,55 @@ func (h CustomerInformationHandlerImpl) GetAllCustomer(w http.ResponseWriter, re
 	}
 
 	var request = model.CustomerFilterRequest{}
-	err = json.NewDecoder(req.Body).Decode(&request)
-	if err != nil {
-		response.ERROR(w, http.StatusBadRequest, err)
-		return
+	// queryData := req.FormValue("query")
+
+	// queryData, err = url.PathUnescape(queryData)
+	// if err != nil {
+	// 	response.ERROR(w, http.StatusBadRequest, err)
+	// 	return
+	// }
+
+	// var DataBytes []byte = []byte(queryData)
+	// err = json.Unmarshal(DataBytes, &request)
+	// if err != nil {
+	// 	response.ERROR(w, http.StatusBadRequest, err)
+	// 	return
+	// }
+
+	// request.Query = req.FormValue("Query")
+	request.CompanyName = req.FormValue("CompanyName")
+	request.ModelName = req.FormValue("ModelName")
+	request.City = req.FormValue("City")
+	MinGroupScore := req.FormValue("MinGroupScore")
+	request.MinGroupScore, err = strconv.ParseFloat(MinGroupScore, 64)
+	MaxGroupScore := req.FormValue("MaxGroupScore")
+	request.MaxGroupScore, err = strconv.ParseFloat(MaxGroupScore, 64)
+	MinPercentage := req.FormValue("MinPercentage")
+	request.MinPercentage, err = strconv.ParseFloat(MinPercentage, 64)
+	MaxPercentage := req.FormValue("MaxPercentage")
+	request.MaxPercentage, err = strconv.ParseFloat(MaxPercentage, 64)
+	request.Sort = req.FormValue("Sort")
+	PageNumber, err := strconv.ParseUint(req.FormValue("PageNumber"), 10, 64)
+	request.PageNumber = uint32(PageNumber)
+	Size, err := strconv.ParseUint(req.FormValue("Size"), 10, 64)
+	request.Size = uint32(Size)
+	if request.CompanyName != "" {
+		aCompany, err := h.companyService.Get(claim, request.CompanyName)
+		if err != nil {
+			response.ERROR(w, http.StatusBadRequest, ErrCompanyNotFound)
+			return
+		}
+		request.CID = aCompany.ID
 	}
-	result, err := h.service.GetAll(claim, request.CompanyName, request.ModelName, request.PageNumber, request.Size, request.Cid, request.Search, request.CreditScore)
+	if request.ModelName != "" {
+		aModel, err := h.modelService.Get(claim, request.CompanyName, request.ModelName)
+		if err != nil {
+			response.ERROR(w, http.StatusBadRequest, ErrModelNotFound)
+			return
+		}
+		request.MID = aModel.ID
+	}
+	result, err := h.service.GetAll(claim, &request)
 	if err != nil {
 		response.ERROR(w, http.StatusInternalServerError, err)
 		return
@@ -129,7 +250,7 @@ func (h CustomerInformationHandlerImpl) GetAllCompayCustomer(w http.ResponseWrit
 		return
 	}
 	if aCompany.ID != claim.CompanyId {
-		response.ERROR(w, http.StatusBadRequest, ErrCompanyMismatch)
+		response.ERROR(w, http.StatusBadRequest, err)
 	}
 
 	result, err := h.service.GetAllCompayCustomer(claim, companyName, modelName)

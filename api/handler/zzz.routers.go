@@ -161,22 +161,8 @@ func registerModelVariableHandlers(db *gorm.DB, router *mux.Router) {
 }
 
 func registerCustomerInformationHandlers(db *gorm.DB, router *mux.Router) {
-	// router.HandleFunc("/companies/customers",func(c *fiber.Ctx)error{
-	// 	info =[]model.CustomerInformation
-
-	// 	sql := "SELECT * FROM info"
-	// 	if s := c.Query("s");s!=""{
-	// 		sql =fmt.Sprintf("%s where first_name like '%%%s%%' or first_name like '%%%s%%'",sql,s,s)
-	// 	}
-	// 	if sort :=c.Query("sort");sort != {
-	// 		sql := fmt.Sprintf("%s ORDER BY income %s",sql,sort)
-	// 	}
-	// 	page ,_ :=strconv.Atoi(C.Query("page",1))
-	// 	perPage :=9
-	// 	db.Raw(sql).Scan(&info)
-	// 	return c.JSON(info)
-	// })
 	router.HandleFunc("/companies/customers", middleware.JSONResponder(middleware.Authenticate(GetCustomerInformationHandlerInstance(db).GetAllCustomer))).Methods(http.MethodPost)
+	router.HandleFunc("/companies/customersExcel", middleware.JSONResponder(middleware.Authenticate(GetCustomerInformationHandlerInstance(db).GetAllCustomerExcel))).Methods(http.MethodPost)
 	router.HandleFunc("/companies/{companyName}/models/{modelName}/data", middleware.JSONResponder(middleware.Authenticate(GetCustomerInformationHandlerInstance(db).GetAllCompayCustomer))).Methods(http.MethodGet)
 	router.HandleFunc("/companies/{companyName}/models/{modelName}/data/{customerInformationId}", middleware.JSONResponder(middleware.Authenticate(GetCustomerInformationHandlerInstance(db).Get))).Methods(http.MethodGet)
 	router.HandleFunc("/companies/{companyName}/models/{modelName}/getCreditScore/{customerInformationId}", middleware.JSONResponder(middleware.Authenticate(GetCustomerInformationHandlerInstance(db).GetCreditScore))).Methods(http.MethodGet)
@@ -188,19 +174,30 @@ func fileHandlers(db *gorm.DB, router *mux.Router) {
 		middleware.JSONResponder(
 			middleware.Authenticate(
 				GetFileHandlerInstance(db).GetAllRawFile))).
-		Methods(http.MethodPut)
-
-	router.HandleFunc("/companies/{companyName}/models/{modelName}/processedFiles",
+		Methods(http.MethodGet)
+	router.HandleFunc("/companies/{companyName}/rawFiles",
 		middleware.JSONResponder(
 			middleware.Authenticate(
-				GetFileHandlerInstance(db).GetAllProcessedFile))).
-		Methods(http.MethodPut)
+				GetFileHandlerInstance(db).GetAllRawFile))).
+		Methods(http.MethodPost)
 
-	router.HandleFunc("/companies/{companyName}/uploadRawFiles",
+	// router.HandleFunc("/companies/{companyName}/models/{modelName}/processedFiles",
+	// 	middleware.JSONResponder(
+	// 		middleware.Authenticate(
+	// 			GetFileHandlerInstance(db).GetAllProcessedFile))).
+	// 	Methods(http.MethodGet)
+
+	router.HandleFunc("/companies/{companyName}/models/{modelName}/uploadRawFiles",
 		middleware.JSONResponder(
 			middleware.Authenticate(
 				GetFileHandlerInstance(db).UploadRawFile))).
 		Methods(http.MethodPost)
+
+	// router.HandleFunc("/companies/{companyName}/uploadRawFiles",
+	// 	middleware.JSONResponder(
+	// 		middleware.Authenticate(
+	// 			GetFileHandlerInstance(db).UploadRawFile))).
+	// 	Methods(http.MethodPost)
 
 	router.HandleFunc("/companies/{companyName}/models/{modelName}/uploadProcessedFiles",
 		middleware.JSONResponder(

@@ -1,9 +1,16 @@
 package response
 
 import (
+	// "bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
+
+	// "path/filepath"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func JSON(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -44,4 +51,12 @@ func ToJSONQuite(data interface{}) (result string) {
 	}
 
 	return
+}
+func JSONDOWNLOAD(w http.ResponseWriter, statusCode int, file *excelize.File) {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename ="+strconv.Quote(strconv.FormatInt(time.Now().Unix(), 10)+"Download.xlsx"))
+	w.Header().Set("Content-Transfer-Encoding", "binary")
+	file.Write(w)
+	w.WriteHeader(statusCode)
 }

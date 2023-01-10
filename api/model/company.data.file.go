@@ -21,3 +21,7 @@ func (CompanyDataFile) TableName() string {
 }
 
 var companyDataFileArray = []*CompanyDataFile{}
+
+type FileFilterRequest struct {
+	FileName string
+}

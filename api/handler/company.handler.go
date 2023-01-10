@@ -60,7 +60,7 @@ func (h CompanyHandlerImpl) Create(w http.ResponseWriter, req *http.Request) {
 	aFile, aFileHeader, err = req.FormFile("logo")
 	if err != nil || aFileHeader == nil {
 		// response.ERROR(w, http.StatusBadRequest, err)
-		// return
+		return
 	}
 
 	var logoContents []byte
@@ -239,7 +239,7 @@ func (h CompanyHandlerImpl) Update(w http.ResponseWriter, req *http.Request) {
 	var aFileHeader *multipart.FileHeader
 	aFile, aFileHeader, err = req.FormFile("logo")
 	if err != nil || aFileHeader == nil {
-
+		return
 	}
 
 	var logoContents []byte

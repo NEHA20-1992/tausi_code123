@@ -11,6 +11,25 @@ import (
 )
 
 const (
+	stmt1 string = `drop procedure if exists fetch_data_from_customer_information`
+	stmt  string = `CREATE DEFINER=root@localhost PROCEDURE fetch_data_from_customer_information(
+		companyID int,
+		modelID   int,
+		fetch_city varchar(255),
+		min_groupscore double,
+		max_groupscore double,
+		min_percentage double,
+		max_percentage double
+		)
+     BEGIN
+		declare Conditions Nvarchar(10000) default '1=1';
+		if companyID <>0 then    set Conditions =concat( Conditions ,' AND company_id =',companyID);end if;
+		if  modelID <>0 then set Conditions = concat( Conditions, ' AND model_id=',modelID);end if;
+		if fetch_city <>'' THEN set Conditions=concat( Conditions ,' AND city =', "'",fetch_city ,"'") ;end if;
+		if max_groupscore <>0 and min_groupscore <>0 then set Conditions = concat(Conditions ,' AND group_score between(',max_groupscore,' and', min_groupscore,')');end if;
+		if max_percentage <> 0 and min_percentage <> 0 then set Conditions = concat(Conditions + ' AND probability_of_default_percentage between(',max_percentage,' and', min_percentage ,')');end if;
+	   SELECT Conditions ;
+		END;`
 	Raw                       = 1
 	Processed                 = 2
 	DtFormatSimpleDate string = "2006-01-02"
@@ -41,7 +60,8 @@ func Initialize(db *gorm.DB) {
 	if err != nil {
 		panic(err)
 	}
-
+	db.Exec(stmt1)
+	db.Exec(stmt)
 	logoContents, err := os.ReadFile("./conf/logo.png")
 	if err != nil {
 		panic(err)
@@ -151,111 +171,111 @@ func Initialize(db *gorm.DB) {
 		CreatedAt:     timestamp}
 	db.Model(&companyFour).Omit("last_updated_by_id", "last_updated_at").Create(&companyFour)
 
-	customer_information_item := model.CustomerInformationItem{
-		CustomerInformationID: 1,
-		ModelVariableID:       2,
-		Name:                  "Income",
-		Value:                 50000,
-		PreprocessedValue:     2}
-	db.Model(&customer_information_item).Create(&customer_information_item)
+	// customer_information_item := model.CustomerInformationItem{
+	// 	CustomerInformationID: 1,
+	// 	ModelVariableID:       2,
+	// 	Name:                  "Income",
+	// 	Value:                 50000,
+	// 	PreprocessedValue:     2}
+	// db.Model(&customer_information_item).Create(&customer_information_item)
 
-	customer_information := model.CustomerInformation{
+	// customer_information := model.CustomerInformation{
 
-		ModelID:                        1,
-		FirstName:                      "Sivansh",
-		LastName:                       "Sai",
-		CustomerIdProofNumber:          "8977463543854",
-		CustomerIDProofTypeID:          1,
-		CustomerIDProofType:            "National Identification Number",
-		ContactNumber:                  "8977689666",
-		City:                           "Hyderabad",
-		ProbabilityOfDefaultPercentage: 87,
-		GroupScore:                     178,
-		CreatedBy:                      "Venkatraman",
-		CreatedById:                    1,
-		CompanyID:                      2,
-		CreatedAt:                      timestamp,
-	}
+	// 	ModelID:                        1,
+	// 	FirstName:                      "Sivansh",
+	// 	LastName:                       "Sai",
+	// 	CustomerIdProofNumber:          "8977463543854",
+	// 	CustomerIDProofTypeID:          1,
+	// 	CustomerIDProofType:            "National Identification Number",
+	// 	ContactNumber:                  "8977689666",
+	// 	City:                           "Hyderabad",
+	// 	ProbabilityOfDefaultPercentage: .87,
+	// 	GroupScore:                     1.78,
+	// 	CreatedBy:                      "Venkatraman",
+	// 	CreatedById:                    1,
+	// 	CompanyID:                      2,
+	// 	CreatedAt:                      timestamp,
+	// }
 
-	db.Model(&customer_information).Create(&customer_information)
-	customer_information1 := model.CustomerInformation{
+	// db.Model(&customer_information).Create(&customer_information)
+	// customer_information1 := model.CustomerInformation{
 
-		ModelID:                        1,
-		FirstName:                      "Rohan",
-		LastName:                       "Sai",
-		CustomerIdProofNumber:          "857463543854",
-		CustomerIDProofTypeID:          2,
-		CustomerIDProofType:            "Passport",
-		ContactNumber:                  "8977689666",
-		City:                           "Hyderabad",
-		ProbabilityOfDefaultPercentage: 87,
-		GroupScore:                     178,
-		CreatedBy:                      "Venkatraman",
-		CreatedById:                    1,
-		CompanyID:                      2,
-		CreatedAt:                      timestamp,
-	}
+	// 	ModelID:                        1,
+	// 	FirstName:                      "Rohan",
+	// 	LastName:                       "Sai",
+	// 	CustomerIdProofNumber:          "857463543854",
+	// 	CustomerIDProofTypeID:          2,
+	// 	CustomerIDProofType:            "Passport",
+	// 	ContactNumber:                  "8977689666",
+	// 	City:                           "Hyderabad",
+	// 	ProbabilityOfDefaultPercentage: .87,
+	// 	GroupScore:                     2.45,
+	// 	CreatedBy:                      "Venkatraman",
+	// 	CreatedById:                    1,
+	// 	CompanyID:                      2,
+	// 	CreatedAt:                      timestamp,
+	// }
 
-	db.Model(&customer_information1).Create(&customer_information1)
-	db.Model(&customer_information).Create(&customer_information)
-	customer_information4 := model.CustomerInformation{
+	// db.Model(&customer_information1).Create(&customer_information1)
+	// db.Model(&customer_information).Create(&customer_information)
+	// customer_information4 := model.CustomerInformation{
 
-		ModelID:                        4,
-		FirstName:                      "Rohan",
-		LastName:                       "Sai",
-		CustomerIdProofNumber:          "857463543854",
-		CustomerIDProofTypeID:          2,
-		CustomerIDProofType:            "Passport",
-		ContactNumber:                  "8977689666",
-		City:                           "Hyderabad",
-		ProbabilityOfDefaultPercentage: 87,
-		GroupScore:                     178,
-		CreatedBy:                      "Venkatraman",
-		CreatedById:                    1,
-		CompanyID:                      4,
-		CreatedAt:                      timestamp,
-	}
+	// 	ModelID:                        4,
+	// 	FirstName:                      "Rohan",
+	// 	LastName:                       "Sai",
+	// 	CustomerIdProofNumber:          "857463543854",
+	// 	CustomerIDProofTypeID:          2,
+	// 	CustomerIDProofType:            "Passport",
+	// 	ContactNumber:                  "8977689666",
+	// 	City:                           "Hyderabad",
+	// 	ProbabilityOfDefaultPercentage: .87,
+	// 	GroupScore:                     17.8,
+	// 	CreatedBy:                      "Venkatraman",
+	// 	CreatedById:                    1,
+	// 	CompanyID:                      4,
+	// 	CreatedAt:                      timestamp,
+	// }
 
-	db.Model(&customer_information4).Create(&customer_information4)
-	customer_information2 := model.CustomerInformation{
+	// db.Model(&customer_information4).Create(&customer_information4)
+	// customer_information2 := model.CustomerInformation{
 
-		ModelID:                        3,
-		FirstName:                      "Rehan",
-		LastName:                       "Sai",
-		CustomerIdProofNumber:          "857463543854",
-		CustomerIDProofTypeID:          2,
-		CustomerIDProofType:            "Passport",
-		ContactNumber:                  "8977689666",
-		City:                           "Chennai",
-		ProbabilityOfDefaultPercentage: 60,
-		GroupScore:                     148,
-		CreatedBy:                      "Venkatraman",
-		CreatedById:                    1,
-		CompanyID:                      3,
-		CreatedAt:                      timestamp,
-	}
+	// 	ModelID:                        3,
+	// 	FirstName:                      "Rehan",
+	// 	LastName:                       "Sai",
+	// 	CustomerIdProofNumber:          "857463543854",
+	// 	CustomerIDProofTypeID:          2,
+	// 	CustomerIDProofType:            "Passport",
+	// 	ContactNumber:                  "8977689666",
+	// 	City:                           "Chennai",
+	// 	ProbabilityOfDefaultPercentage: .68,
+	// 	GroupScore:                     14.8,
+	// 	CreatedBy:                      "Venkatraman",
+	// 	CreatedById:                    1,
+	// 	CompanyID:                      3,
+	// 	CreatedAt:                      timestamp,
+	// }
 
-	db.Model(&customer_information2).Create(&customer_information2)
+	// db.Model(&customer_information2).Create(&customer_information2)
 
-	customer_information3 := model.CustomerInformation{
+	// customer_information3 := model.CustomerInformation{
 
-		ModelID:                        2,
-		FirstName:                      "Rehan",
-		LastName:                       "Gurjar",
-		CustomerIdProofNumber:          "857463543854",
-		CustomerIDProofTypeID:          2,
-		CustomerIDProofType:            "Passport",
-		ContactNumber:                  "8977689666",
-		City:                           "Chennai",
-		ProbabilityOfDefaultPercentage: 80,
-		GroupScore:                     148,
-		CreatedBy:                      "Venkatraman",
-		CreatedById:                    1,
-		CompanyID:                      2,
-		CreatedAt:                      timestamp,
-	}
+	// 	ModelID:                        2,
+	// 	FirstName:                      "Rehan",
+	// 	LastName:                       "Gurjar",
+	// 	CustomerIdProofNumber:          "857463543854",
+	// 	CustomerIDProofTypeID:          2,
+	// 	CustomerIDProofType:            "Passport",
+	// 	ContactNumber:                  "8977689666",
+	// 	City:                           "Chennai",
+	// 	ProbabilityOfDefaultPercentage: 80,
+	// 	GroupScore:                     14.8,
+	// 	CreatedBy:                      "Venkatraman",
+	// 	CreatedById:                    1,
+	// 	CompanyID:                      2,
+	// 	CreatedAt:                      timestamp,
+	// }
 
-	db.Model(&customer_information3).Create(&customer_information3)
+	// db.Model(&customer_information3).Create(&customer_information3)
 
 	modelOne := model.Model{
 		CompanyID:      companyTwo.ID,
@@ -470,7 +490,7 @@ func Initialize(db *gorm.DB) {
 	user := model.User{
 		FirstName:     "Derick",
 		LastName:      "Kazimoto",
-		Email:         "d.kazimoto@afropavoanalytics.com",
+		Email:         "nehadv981@gmail.com",
 		Password:      "hello123",
 		ContactNumber: "+255 756 339 626",
 		CompanyId:     companyOne.ID,
@@ -499,7 +519,7 @@ func Initialize(db *gorm.DB) {
 		Email:         "r.mutahaba@afropavoanalytics.com",
 		Password:      "tausiadmin123",
 		ContactNumber: "+255 765 664 084",
-		CompanyId:     1,
+		CompanyId:     3,
 		EmailVerified: true,
 		Active:        true,
 		CreatedById:   1,
@@ -509,10 +529,10 @@ func Initialize(db *gorm.DB) {
 	user = model.User{
 		FirstName:     "Sophia",
 		LastName:      "Mwinyi",
-		Email:         "s.mwinyi@afropavoanalytics.com",
-		Password:      "tausiadmin123",
+		Email:         "nehamaltiyadav@gmail.com",
+		Password:      "hi123",
 		ContactNumber: "+255 713 557 731",
-		CompanyId:     1,
+		CompanyId:     2,
 		EmailVerified: true,
 		Active:        true,
 		CreatedById:   1,
@@ -525,7 +545,7 @@ func Initialize(db *gorm.DB) {
 		Email:         "prakash.d@3edge.in",
 		Password:      "hello123",
 		ContactNumber: "+91 96000 02859",
-		CompanyId:     1,
+		CompanyId:     3,
 		EmailVerified: true,
 		Active:        true,
 		CreatedById:   1,
@@ -535,23 +555,10 @@ func Initialize(db *gorm.DB) {
 	user = model.User{
 		FirstName:     "Muralikrishnan",
 		LastName:      "s",
-		Email:         "muralikrishnan.s@3edge.in",
+		Email:         "nihu.y.20@gmail.com",
 		Password:      "test123",
 		ContactNumber: "+91 9500984141",
-		CompanyId:     2,
-		EmailVerified: true,
-		Active:        true,
-		CreatedById:   1,
-		CreatedAt:     timestamp}
-	create(db, &user)
-
-	user = model.User{
-		FirstName:     "Muralikrishnan",
-		LastName:      "s",
-		Email:         "ssmkrishnan86@gmail.com",
-		Password:      "test123",
-		ContactNumber: "+91 9500984141",
-		CompanyId:     2,
+		CompanyId:     4,
 		UserRoles:     urList,
 		EmailVerified: true,
 		Active:        true,

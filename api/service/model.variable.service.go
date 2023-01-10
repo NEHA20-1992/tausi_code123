@@ -276,6 +276,7 @@ func getAllModelVariables(db *gorm.DB, claim *auth.AuthenticatedClaim, modelID u
 		// Load the Enumerator Items
 		if newRecord.DataType == 2 {
 			eiList := []model.EnumerationItem{}
+
 			err = db.Debug().
 				Model(&model.EnumerationItem{}).
 				Limit(1000).

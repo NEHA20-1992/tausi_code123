@@ -13,9 +13,10 @@ type CustomerInformation struct {
 	CustomerIDProofType            string                    `gorm:"-" json:"type,omitempty"`
 	ContactNumber                  string                    `gorm:"size:25;not null" json:"contactNumber,omitempty"`
 	City                           string                    `gorm:"size:255;not null" json:"city,omitempty"`
+	AccountID                      string                    `gorm:"size:255;not null"`
 	ProbabilityOfDefaultPercentage float64                   `gorm:"null" json:"probabilityOfDefaultPercentage,omitempty"`
 	GroupScore                     float64                   `gorm:"null" json:"groupScore,omitempty"`
-	Items                          []CustomerInformationItem `gorm:"-" json:"items,omitempty"` // The values for the Credit Score Rating
+	Items                          []CustomerInformationItem `gorm:"-" json:"items"` // The values for the Credit Score Rating
 	CreatedBy                      string                    `gorm:"-" json:"createdBy,omitempty"`
 	CompanyID                      uint32                    `gorm:"not null" json:"-"`
 	CreatedById                    uint32                    `gorm:"null" json:"-"`
@@ -35,14 +36,18 @@ type CustomerCreditScore struct {
 }
 
 type CustomerFilterRequest struct {
-	CompanyName string
-	ModelName   string
-	PageNumber  uint32
-	Size        uint32
-	Cid         uint32
-	Search      string
-	Salary      float32
-	CreditScore float32
+	CompanyName   string
+	ModelName     string
+	City          string
+	MinGroupScore float64
+	MaxGroupScore float64
+	MinPercentage float64
+	MaxPercentage float64
+	Sort          string
+	PageNumber    uint32
+	Size          uint32
+	CID           uint32
+	MID           uint32
 }
 
 func (CustomerInformation) TableName() string {
